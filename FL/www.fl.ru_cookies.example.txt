@@ -1,0 +1,16 @@
+# Netscape HTTP Cookie File
+# http://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file!  Do not edit.
+#
+# Для работы с сайтом FL.ru вам потребуется создать файл www.fl.ru_cookies.txt
+# с вашими личными куки, полученными после авторизации на сайте.
+#
+# Вы можете получить куки одним из следующих способов:
+# 1. Использовать расширение для браузера "Cookie-Editor" или аналогичное
+# 2. Использовать инструменты разработчика в браузере
+#
+# После получения куки, файл должен иметь следующую структуру:
+#
+# .fl.ru	TRUE	/	FALSE	1764461800	cookie_name1	cookie_value1
+# .fl.ru	TRUE	/	TRUE	1764461800	cookie_name2	cookie_value2
+# www.fl.ru	FALSE	/	FALSE	1769994660	cookie_name3	cookie_value3 

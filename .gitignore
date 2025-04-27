@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Database
+TelegramBot/user_data.db
+
+# Logs
+*.log
+
+# Cookies
+FL/www.fl.ru_cookies.txt
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/ 

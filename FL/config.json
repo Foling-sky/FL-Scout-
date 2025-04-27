@@ -1,0 +1,46 @@
+{
+	"categories": {
+		"starter": {
+			"min_price": 1000,
+			"max_price": 4999,
+			"folder": "Starter"
+		},
+		"basic_plus": {
+			"min_price": 5000,
+			"max_price": 9999,
+			"folder": "Basic+"
+		},
+		"pro": {
+			"min_price": 10000,
+			"max_price": 19999,
+			"folder": "Pro"
+		},
+		"business": {
+			"min_price": 20000,
+			"max_price": 39999,
+			"folder": "Business"
+		},
+		"enterprise": {
+			"min_price": 40000,
+			"max_price": null,
+			"folder": "Enterprise"
+		}
+	},
+	"timecode": {
+		"folder": "TimeCode",
+		"keywords": [
+			"час",
+			"почасовая",
+			"в час",
+			"руб/час",
+			"руб/ч",
+			"₽/час",
+			"р/час",
+			"р/ч"
+		]
+	},
+	"keywords": {
+		"excluded": ["спам", "млм", "сетевой маркетинг"],
+		"included": []
+	}
+}
