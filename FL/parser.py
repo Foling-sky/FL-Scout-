@@ -11,6 +11,9 @@ from datetime import datetime
 from yarl import URL
 import undetected_chromedriver as uc
 import re
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 class WorkzilaParser:
     def __init__(self, config_path: str = "config.json", cookies_path: str = "www.fl.ru_cookies.txt"):
@@ -20,6 +23,17 @@ class WorkzilaParser:
         self.config = self.load_config(config_path)
         self.cookies = self.load_cookies(cookies_path)
         self.processed_tasks = self.load_processed_tasks()
+        self.categories = [
+            {"name": "Сайты", "option_id": "vs1___option-0"},
+            {"name": "Программирование", "option_id": "vs1___option-2"},
+            {"name": "AI — искусственный интеллект", "option_id": "vs1___option-11"},
+            {"name": "Социальные сети", "option_id": "vs1___option-12"},
+            {"name": "Мессенджеры", "option_id": "vs1___option-14"},
+            {"name": "Браузеры", "option_id": "vs1___option-17"},
+            {"name": "Крипто и блокчейн", "option_id": "vs1___option-18"},
+            {"name": "Интернет-магазины", "option_id": "vs1___option-20"},
+            {"name": "Автоматизация бизнеса", "option_id": "vs1___option-21"}
+        ]
         
     def load_config(self, config_path: str) -> Dict:
         with open(config_path, 'r', encoding='utf-8') as f:
@@ -310,8 +324,7 @@ class WorkzilaParser:
             options.add_argument("--headless=new")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--disable-extensions")
+            options.add_argument("--start-maximized")
             
             print("Запускаю браузер в фоновом режиме...")
             driver = uc.Chrome(
@@ -323,25 +336,92 @@ class WorkzilaParser:
             driver.get(self.base_url)
             time.sleep(2)
             
-            print("Устанавливаю куки...")
-            for name, value in self.cookies.items():
-                try:
-                    cookie = {
-                        'name': name,
-                        'value': value,
-                        'domain': '.fl.ru'
-                    }
-                    driver.add_cookie(cookie)
-                except Exception as e:
-                    print(f"Ошибка установки куки {name}: {str(e)}")
-            
             url = f"{self.base_url}/projects/"
             print(f"\nПереходим на страницу с заданиями: {url}")
             driver.get(url)
             time.sleep(5)
             
+            print("\nНачинаю выбор категорий...")
+            for category in self.categories:
+                try:
+                    dropdown = WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "#vs1__combobox"))
+                    )
+                    dropdown.click()
+                    print(f"Открыл выпадающий список для выбора категории: {category['name']}")
+                    time.sleep(1)
+                    
+                    options = WebDriverWait(driver, 5).until(
+                        EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".vs__dropdown-option"))
+                    )
+                    
+                    found = False
+                    for option in options:
+                        if category['name'] in option.text:
+                            option.click()
+                            print(f"✓ Выбрана категория: {category['name']}")
+                            found = True
+                            time.sleep(1.5)
+                            break
+                    
+                    if not found:
+                        print(f"✗ Не удалось найти категорию: {category['name']}")
+                        driver.find_element(By.TAG_NAME, "body").click()
+                except Exception as e:
+                    print(f"✗ Ошибка при выборе категории {category['name']}: {str(e)}")
+                    try:
+                        driver.find_element(By.TAG_NAME, "body").click()
+                    except:
+                        pass
+            
+            print("\nПрименяю выбранные фильтры...")
+            try:
+                apply_button = None
+                selectors = [
+                    ".ui-button.mt-36.w-100._responsive._primary._md",
+                    "//button[contains(., 'Применить фильтр')]",
+                    "//button[contains(@class, 'ui-button') and .//div[contains(text(), 'Применить фильтр')]]"
+                ]
+                
+                for selector in selectors:
+                    try:
+                        if selector.startswith("//"):
+                            button = WebDriverWait(driver, 3).until(
+                                EC.element_to_be_clickable((By.XPATH, selector))
+                            )
+                        else:
+                            button = WebDriverWait(driver, 3).until(
+                                EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                            )
+                        
+                        if button:
+                            apply_button = button
+                            print(f"✓ Найдена кнопка 'Применить фильтр' с селектором: {selector}")
+                            break
+                    except:
+                        continue
+                
+                if apply_button:
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", apply_button)
+                    time.sleep(1)
+                    
+                    apply_button.click()
+                    print("✓ Кнопка 'Применить фильтр' нажата")
+                    
+                    time.sleep(5)
+                else:
+                    print("✗ Кнопка 'Применить фильтр' не найдена. Парсинг невозможен.")
+                    return [], stats
+            except Exception as e:
+                print(f"✗ Ошибка при нажатии на кнопку 'Применить фильтр': {str(e)}")
+                print("Парсинг невозможен без применения фильтров.")
+                return [], stats
+            
+            print("Ожидаем загрузку результатов после применения фильтров...")
+            time.sleep(5)
+            
             print("\nПолучаю список заданий...")
-            task_elements = driver.find_elements("css selector", 'div[qa-project-name^="project-item"]')
+            task_elements = driver.find_elements(By.CSS_SELECTOR, 'div[qa-project-name^="project-item"]')
             stats['found'] = len(task_elements)
             
             if stats['found'] > 0:
@@ -353,8 +433,8 @@ class WorkzilaParser:
                         
                         has_executor = False
                         try:
-                            executor_elem = element.find_element("css selector", 'span[data-id="fl-view-count-href"].text-7:contains("Исполнитель определён")')
-                            if executor_elem:
+                            executor_text = element.text
+                            if "Исполнитель определён" in executor_text:
                                 has_executor = True
                                 stats['has_executor'] += 1
                                 print(f"Задание {task_id} уже имеет исполнителя, пропускаем")
@@ -362,11 +442,11 @@ class WorkzilaParser:
                         except:
                             pass
                         
-                        title_elem = element.find_element("css selector", '.b-post__title a')
+                        title_elem = element.find_element(By.CSS_SELECTOR, '.b-post__title a')
                         title = title_elem.text.strip()
                         task_url = title_elem.get_attribute('href')
                         
-                        price_elem = element.find_element("css selector", '.b-post__price .text-4')
+                        price_elem = element.find_element(By.CSS_SELECTOR, '.b-post__price .text-4')
                         price_text = price_elem.text.strip()
                         
                         hourly_markers = ['₽/час', 'р/час', 'руб/час', 'р/ч']
@@ -407,19 +487,19 @@ class WorkzilaParser:
                                 price = 0
                                 task_type = "unknown"
                         
-                        description = element.find_element("css selector", '.b-post__txt.text-5').text.strip()
+                        description = element.find_element(By.CSS_SELECTOR, '.b-post__txt.text-5').text.strip()
                         
-                        time_elem = element.find_element("css selector", '.text-gray-opacity-4')
+                        time_elem = element.find_element(By.CSS_SELECTOR, '.text-gray-opacity-4')
                         posted_time = time_elem.text.strip()
                         
                         try:
-                            views_elem = element.find_element("css selector", 'span[title="Количество просмотров"] + .text-7')
+                            views_elem = element.find_element(By.CSS_SELECTOR, 'span[title="Количество просмотров"] + .text-7')
                             views = views_elem.text.strip()
                         except:
                             views = "Нет данных"
                         
                         try:
-                            responses_elem = element.find_element("css selector", 'span[data-id="fl-view-count-href"]')
+                            responses_elem = element.find_element(By.CSS_SELECTOR, 'span[data-id="fl-view-count-href"]')
                             responses = responses_elem.text.strip()
                         except:
                             responses = "Нет ответов"
@@ -517,22 +597,86 @@ class WorkzilaParser:
                 driver.get(self.base_url)
                 time.sleep(2)
                 
-                print("Устанавливаю куки...")
-                for name, value in self.cookies.items():
-                    try:
-                        cookie = {
-                            'name': name,
-                            'value': value,
-                            'domain': '.fl.ru'
-                        }
-                        driver.add_cookie(cookie)
-                    except Exception as e:
-                        print(f"Пропущен куки {name}: {str(e)}")
-                
                 print("Перехожу на страницу FL.ru...")
                 driver.get(f"{self.base_url}/projects/")
+                time.sleep(3)
                 
-                print("\nБраузер открыт. Проверьте авторизацию и структуру страницы.")
+                print("\nХотите выбрать категории? (y/n):")
+                choice = input().lower()
+                
+                if choice == 'y':
+                    try:
+                        print("Открываю выпадающий список категорий...")
+                        category_dropdown = WebDriverWait(driver, 10).until(
+                            EC.presence_of_element_located((By.CSS_SELECTOR, "#vs1__combobox"))
+                        )
+                        category_dropdown.click()
+                        time.sleep(1)
+                        print("✓ Выпадающий список категорий открыт")
+                        
+                        print("\nВыбираю заданные категории:")
+                        for category in self.categories:
+                            try:
+                                option_element = WebDriverWait(driver, 5).until(
+                                    EC.presence_of_element_located((By.ID, category["option_id"]))
+                                )
+                                option_element.click()
+                                print(f"✓ Выбрана категория: {category['name']}")
+                                time.sleep(0.5)
+                            except Exception as e:
+                                print(f"✗ Не удалось выбрать категорию {category['name']}: {str(e)}")
+                        
+                        try:
+                            body = driver.find_element(By.TAG_NAME, "body")
+                            body.click()
+                            time.sleep(1)
+                            print("✓ Закрыт выпадающий список категорий")
+                        except Exception as e:
+                            print(f"✗ Не удалось закрыть выпадающий список: {str(e)}")
+                        
+                        try:
+                            apply_button = None
+                            selectors = [
+                                ".ui-button.mt-36.w-100._responsive._primary._md",
+                                "//button[contains(., 'Применить фильтр')]",
+                                "//button[contains(@class, 'ui-button') and .//div[contains(text(), 'Применить фильтр')]]"
+                            ]
+                            
+                            for selector in selectors:
+                                try:
+                                    if selector.startswith("//"):
+                                        button = WebDriverWait(driver, 3).until(
+                                            EC.element_to_be_clickable((By.XPATH, selector))
+                                        )
+                                    else:
+                                        button = WebDriverWait(driver, 3).until(
+                                            EC.element_to_be_clickable((By.CSS_SELECTOR, selector))
+                                        )
+                                    
+                                    if button:
+                                        apply_button = button
+                                        print(f"✓ Найдена кнопка 'Применить фильтр' с селектором: {selector}")
+                                        break
+                                except:
+                                    continue
+                            
+                            if apply_button:
+                                driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", apply_button)
+                                time.sleep(1)
+                                
+                                apply_button.click()
+                                print("✓ Кнопка 'Применить фильтр' нажата")
+                                time.sleep(3)
+                            else:
+                                print("✗ Кнопка 'Применить фильтр' не найдена")
+                        except Exception as e:
+                            print(f"✗ Ошибка при нажатии на кнопку 'Применить фильтр': {str(e)}")
+                        
+                        time.sleep(3)
+                    except Exception as e:
+                        print(f"✗ Ошибка при выборе категорий: {str(e)}")
+                
+                print("\nБраузер открыт. Проверьте работу с категориями и структуру страницы.")
                 print("Нажмите Enter, чтобы закрыть браузер...")
                 input()
                 
@@ -548,7 +692,6 @@ class WorkzilaParser:
     def check_processed_tasks(self):
         try:
             current_tasks = self.processed_tasks.copy()
-            
             self.processed_tasks = self.load_processed_tasks()
             
             if current_tasks != self.processed_tasks:
@@ -615,6 +758,7 @@ class ParserManager:
         self.is_running = True
         self.start_time = time.time()
         print("\nПарсер запущен в непрерывном режиме. Для остановки нажмите Ctrl+C")
+        print("Браузер работает в фоновом режиме.")
         print(f"Интервал проверки новых заданий: {self.check_interval} секунд (2 минуты)")
         
         while self.is_running:
@@ -627,6 +771,7 @@ class ParserManager:
                 self.show_stats()
                 
                 print(f"\nСледующая проверка через {self.check_interval} секунд...")
+                print("Чтобы остановить программу, нажмите Ctrl+C")
                 for _ in range(self.check_interval):
                     if not self.is_running:
                         break
@@ -634,6 +779,8 @@ class ParserManager:
                     
             except Exception as e:
                 print(f"Ошибка при парсинге: {str(e)}")
+                import traceback
+                print(traceback.format_exc())
                 if self.is_running:
                     await asyncio.sleep(5)
 
@@ -646,6 +793,12 @@ async def main():
     manager = ParserManager(config_path, cookies_path)
     
     try:
+        print("\n=== ПАРСЕР FL.RU С АВТОМАТИЧЕСКИМ ВЫБОРОМ КАТЕГОРИЙ ===")
+        print("\nПарсер будет работать в фоновом режиме.")
+        print("После завершения работы, нажмите Ctrl+C для выхода из программы.")
+        
+        await asyncio.sleep(3)
+        
         await manager.run_parser()
     except KeyboardInterrupt:
         print("\nПолучен сигнал остановки...")
@@ -694,15 +847,35 @@ async def main_test():
         await parser.close_session()
         print("Тестирование завершено")
 
+async def test_categories():
+    import os
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "config.json")
+    cookies_path = os.path.join(script_dir, "www.fl.ru_cookies.txt")
+    
+    parser = WorkzilaParser(config_path=config_path, cookies_path=cookies_path)
+    
+    try:
+        await parser.debug_in_browser()
+    except Exception as e:
+        print(f"Ошибка при тестировании категорий: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+
 if __name__ == "__main__":
     import sys
     
     try:
-        if len(sys.argv) > 1 and sys.argv[1] == "--test":
-            # Тестовый режим
-            asyncio.run(main_test())
+        if len(sys.argv) > 1:
+            if sys.argv[1] == "--test":
+                asyncio.run(main_test())
+            elif sys.argv[1] == "--categories":
+                asyncio.run(test_categories())
         else:
-            # Обычный режим работы
             asyncio.run(main())
     except KeyboardInterrupt:
-        print("\nВыход из программы...") 
+        print("\nПрограмма остановлена пользователем.")
+    except Exception as e:
+        print(f"Критическая ошибка: {str(e)}")
+        import traceback
+        print(traceback.format_exc()) 
