@@ -68,6 +68,7 @@ class WorkzilaParser:
     def parse_publication_date(self, date_str: str) -> datetime:
         try:
             main_date_str = date_str.split('[')[0].strip()
+            
             pattern = r'(\d{2}\.\d{2}\.\d{4})\s*\|\s*(\d{2}:\d{2})'
             match = re.search(pattern, main_date_str)
             
@@ -96,6 +97,7 @@ class WorkzilaParser:
             )
             
             self.processed_tasks = dict(sorted_tasks)
+            
             print(f"Сохранено {len(self.processed_tasks)} заказов")
                     
             with open('processed_tasks.json', 'w', encoding='utf-8') as f:
@@ -162,8 +164,8 @@ class WorkzilaParser:
                     html = await response.text()
                     
                     auth_markers = [
-                        'name="-"',
-                        'id="-"',
+                        'name=""',
+                        'id=""',
                         'class="b-layout__header_auth"',
                         'class="b-layout__header_auth_wrapper"'
                     ]
@@ -235,6 +237,7 @@ class WorkzilaParser:
                     detailed_info["responses_info"] = responses_text
                     
                     try:
+                        import re
                         numbers = re.findall(r'\d+', responses_text)
                         if numbers:
                             detailed_info["responses_count"] = int(numbers[0])
@@ -545,6 +548,7 @@ class WorkzilaParser:
     def check_processed_tasks(self):
         try:
             current_tasks = self.processed_tasks.copy()
+            
             self.processed_tasks = self.load_processed_tasks()
             
             if current_tasks != self.processed_tasks:
@@ -616,8 +620,10 @@ class ParserManager:
         while self.is_running:
             try:
                 self.parser.check_processed_tasks()
+                
                 tasks, stats = await self.parser.parse_tasks()
                 self.update_total_stats(stats, tasks)
+                
                 self.show_stats()
                 
                 print(f"\nСледующая проверка через {self.check_interval} секунд...")
@@ -662,6 +668,7 @@ async def main_test():
     
     try:
         await parser.init_session()
+        
         test_url = "https://www.fl.ru/projects/5419983/napisat-otzyivyi-dlya-salonov-krasotyi.html"
         
         print(f"\nТестирование парсинга детальной информации для URL: {test_url}")
